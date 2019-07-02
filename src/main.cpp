@@ -84,63 +84,63 @@ int main() {
         string event = j[0].get<string>();
         
         if (event == "telemetry") {
-          // j[1] is the data JSON object
-          
-          // Main car's localization Data
-          double car_x = j[1]["x"];
-          double car_y = j[1]["y"];
-          double car_s = j[1]["s"];
-          double car_d = j[1]["d"];
-          double car_yaw = j[1]["yaw"];
-          double car_speed = j[1]["speed"];
+            // j[1] is the data JSON object
+
+            // Main car's localization Data
+            double car_x = j[1]["x"];
+            double car_y = j[1]["y"];
+            double car_s = j[1]["s"];
+            double car_d = j[1]["d"];
+            double car_yaw = j[1]["yaw"];
+            double car_speed = j[1]["speed"];
 
           // Previous path data given to the Planner
-          auto previous_path_x = j[1]["previous_path_x"];
-          auto previous_path_y = j[1]["previous_path_y"];
-          // Previous path's end s and d values 
-          double end_path_s = j[1]["end_path_s"];
-          double end_path_d = j[1]["end_path_d"];
+            auto previous_path_x = j[1]["previous_path_x"];
+            auto previous_path_y = j[1]["previous_path_y"];
+           // Previous path's end s and d values
+            double end_path_s = j[1]["end_path_s"];
+            double end_path_d = j[1]["end_path_d"];
 
-          // Sensor Fusion Data, a list of all other cars on the same side of the road.
-          auto sensor_fusion = j[1]["sensor_fusion"];
-          int prev_size = previous_path_x.size();
+            // Sensor Fusion Data, a list of all other cars on the same side of the road.
+            auto sensor_fusion = j[1]["sensor_fusion"];
+            int prev_size = previous_path_x.size();
 
-          if (prev_size > 0)
-          {
+            if (prev_size > 0)
+            {
               car_s = end_path_s;
-          }
-
-        bool too_close = false;
-        bool car_left = false;
-        bool car_right = false;
-
-        for (int i = 0; i < sensor_fusion.size(); i++)
-        {
-            // car is in my lane
-            float d = sensor_fusion[i][6];
-
-            double vx = sensor_fusion[i][3];
-            double vy = sensor_fusion[i][4];
-            double check_speed = sqrt(vx*vx + vy*vy);
-            double check_car_s = sensor_fusion[i][5];
-            double car_lane = getLane(d);
-
-            // if using previous points can project s value out
-            check_car_s += ((double)prev_size * .02 * check_speed);
-
-            // check s values greater than mine and s gap
-            if (car_lane == lane) {
-                // Another car is ahead
-                too_close |= (check_car_s > car_s) && ((check_car_s - car_s) < 30);
-            } else if (car_lane - lane == 1) {
-                // Another car is to the right
-                car_right |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
-            } else if (lane - car_lane == 1) {
-                // Another car is to the left
-                car_left |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
             }
 
-        }
+            bool too_close = false;
+            bool car_left = false;
+            bool car_right = false;
+
+            for (int i = 0; i < sensor_fusion.size(); i++)
+            {
+                // car is in my lane
+                float d = sensor_fusion[i][6];
+
+                double vx = sensor_fusion[i][3];
+                double vy = sensor_fusion[i][4];
+                double check_speed = sqrt(vx*vx + vy*vy);
+                double check_car_s = sensor_fusion[i][5];
+                double car_lane = getLane(d);
+
+                // if using previous points can project s value out
+                check_car_s += ((double)prev_size * .02 * check_speed);
+
+                // check s values greater than mine and s gap
+                if (car_lane == lane) {
+                    // Another car is ahead
+                    too_close |= (check_car_s > car_s) && ((check_car_s - car_s) < 30);
+                } else if (car_lane - lane == 1) {
+                    // Another car is to the right
+                    car_right |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
+                } else if (lane - car_lane == 1) {
+                    // Another car is to the left
+                    car_left |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
+                }
+
+            }
 
 
             if (too_close) {
