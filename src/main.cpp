@@ -110,9 +110,9 @@ int main() {
               car_s = end_path_s;
           }
 
-          bool too_close = false;
-          //vector<bool> can_change_lane = {true, true, true};
-          //can_change_lane[lane] = false;
+        bool too_close = false;
+        bool car_left = false;
+        bool car_right = false;
 
         for (int i = 0; i < sensor_fusion.size(); i++)
         {
@@ -129,38 +129,38 @@ int main() {
             check_car_s += ((double)prev_size * .02 * check_speed);
 
             // check s values greater than mine and s gap
-            if (car_lane == lane && (check_car_s > car_s) && ((check_car_s - car_s) < 30))
-            {
-                too_close = true;
+            if (car_lane == lane) {
+                // Another car is ahead
+                too_close |= (check_car_s > car_s) && ((check_car_s - car_s) < 30);
+            } else if (car_lane - lane == 1) {
+                // Another car is to the right
+                car_right |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
+            } else if (lane - car_lane == 1) {
+                // Another car is to the left
+                car_left |= ((car_s - 30) < check_car_s) && ((car_s + 30) > check_car_s);
             }
 
-            //if (check_speed > car_speed || ((check_car_s - car_s > -10) && (check_car_s - car_s < 30)))
-            //{
-            //    can_change_lane[car_lane] = false;
-            //}
         }
 
-           if (too_close)
-           {
-               ref_vel -=0.224;
-           }
-//            {
-//                if (lane - 1 >= 0 && can_change_lane[lane - 1])
-//                {
-//                    lane -= 1;
-//                }
-//                else if (lane + 1 <= 2 && can_change_lane[lane + 1])
-//                {
-//                    lane += 1;
-//                }
-//                else
-//                {
-//                    ref_vel -= 0.112;
-//                }
-//            }
-            else if (ref_vel < 49.5)
-            {
-                ref_vel += 0.224;
+
+            if (too_close) {
+                if (!car_right && lane < 2) {
+                    lane++;
+                } else if (!car_left && lane > 0) {
+                    lane--;
+                } else {
+                    ref_vel -= 0.224;
+                }
+            } else {
+                if (lane != 1) {
+                    if ((lane == 2 && !car_left) || (lane == 0 && !car_right)) {
+                        lane = 1;
+                    }
+                }
+
+                if (ref_vel < 49.5) {
+                    ref_vel += 0.224;
+                }
             }
 
             // Create a list of widely spaced (x, y) waypoints, evenly spaced at 30m
