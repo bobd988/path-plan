@@ -111,8 +111,8 @@ int main() {
           }
 
           bool too_close = false;
-          vector<bool> can_change_lane = {true, true, true};
-          can_change_lane[lane] = false;
+          //vector<bool> can_change_lane = {true, true, true};
+          //can_change_lane[lane] = false;
 
         for (int i = 0; i < sensor_fusion.size(); i++)
         {
@@ -134,27 +134,30 @@ int main() {
                 too_close = true;
             }
 
-            if (check_speed > car_speed || ((check_car_s - car_s > -10) && (check_car_s - car_s < 30)))
-            {
-                can_change_lane[car_lane] = false;
-            }
+            //if (check_speed > car_speed || ((check_car_s - car_s > -10) && (check_car_s - car_s < 30)))
+            //{
+            //    can_change_lane[car_lane] = false;
+            //}
         }
 
-            if (too_close)
-            {
-                if (lane - 1 >= 0 && can_change_lane[lane - 1])
-                {
-                    lane -= 1;
-                }
-                else if (lane + 1 <= 2 && can_change_lane[lane + 1])
-                {
-                    lane += 1;
-                }
-                else
-                {
-                    ref_vel -= 0.112;
-                }
-            }
+           if (too_close)
+           {
+               ref_vel -=0.224;
+           }
+//            {
+//                if (lane - 1 >= 0 && can_change_lane[lane - 1])
+//                {
+//                    lane -= 1;
+//                }
+//                else if (lane + 1 <= 2 && can_change_lane[lane + 1])
+//                {
+//                    lane += 1;
+//                }
+//                else
+//                {
+//                    ref_vel -= 0.112;
+//                }
+//            }
             else if (ref_vel < 49.5)
             {
                 ref_vel += 0.224;
