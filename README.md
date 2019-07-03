@@ -41,20 +41,21 @@ For this project, I have used the Path Planning Project Starter Code from Udacit
 
 ### 1. Prediction and Decision
 
-This step looks for the closest cars: the car in front of the ego vehicle and the car just behind the ego vehicle for every lane. By using the sensor fusion data the program can detect the position of other vehicles around us. The code uses this information to measure the distance of cars. If ego car gets too close to the car in front of it then decelerate the vehicle and try to pass it by changing lanes. For instance, if a car on the left or right lane is 30 waypoints behind us then set the left_lane_car or right_lane_car in in main.cpp to true and prevent the vehicle from changing lanes.
+This step looks for the closest cars: the car in front of the ego vehicle and the car just behind the ego vehicle for every lane. By using the sensor fusion data the program can detect the position of other vehicles around us. The code uses this information to measure the distance of cars. If ego car gets too close to the car in front of it then decelerate the vehicle and try to pass it by changing lanes. For instance, if a car on the left or right lane is 30 waypoints behind us then set the left_lane_car or right_lane_car in in main.cpp to true and prevent the vehicle from changing lanes. 
 
-The key data structure sensor_fusion is a 2d vector which has following fields:
-* car's unique ID,
+The sensor_fusion is a 2d vector which has following fields: 
+* car's unique ID, 
 * car's x position in map coordinates
 * car's y position in map coordinates
 * car's x velocity in m/s
 * car's y velocity in m/s
 * car's s position in frenet coordinates
 * car's d position in frenet coordinates
-A sample sensor_fusion is like this
 
 ```cpp
+A sample sensor_fusion is like this
 ...
+
 
 [0,1028.214,1148.148,19.12857,8.593667,243.1204,10.14141],[1,1090.842,1181.932,19.95762,5.89691,314.2516,1.103784],
 [2, 832.3537, 1128.152, 0.2051127, 0.01166543, 47.76477, 6.766784]
@@ -112,7 +113,7 @@ vector<double> next_wp2 = getXY(car_s + 90, (2 + 4 * lane), map_waypoints_s, map
 
 ```
 
-The path will always total 50 points at desired speed. Now besides the above 5 points  we will calculate rest of points. The below code shows how use  spline how to break up spline points so that car travels at desired reference velocity for the rest of ponts.  We create a list of  spaced (x, y) waypoints, evenly spaced at 30m. Then we interpolate these waypoints with a spline and fill it in with more points that control speed. we fill up the rest of path planner after filling it with previous points,
+The path will always total 50 points at desired speed. Now besides the above 5 points  we will calculate rest of points. The below code shows how use  spline how to break up spline points so that car travels at desired reference velocity for the rest of ponts.  We create a list of  spaced (x, y) waypoints, evenly spaced at 30m. Then we interpolate these waypoints with a spline and fill it in with more points that control speed. we fill up the rest of path planner after filling it with previous points, 
 
 N is the number of pieces we want to split the line. Velocity is the desired velocity in meters per hour. NOTE: the car will visit a point every 0.02 seconds
 
@@ -124,19 +125,19 @@ N is the number of pieces we want to split the line. Velocity is the desired vel
 ```cpp
 double target_x = 30.0;
 double target_y = s(target_x);
-double target_dist = sqrt((target_x * target_x) + (target_y * target_y)); // this is shown in d distance as above
+double target_dist = sqrt((target_x * target_x) + (target_y * target_y)); // this is shown in d distance as above 
 
 double x_add_on = 0;
 for (int i = 1; i <= 50 - previous_path_x.size(); i++)
 {
    double N = (target_dist / (.02 * ref_vel / 2.24)); // 2.24 convert mile/hour to meter/second ,N = d/.0.2*ref_vel
-   double x_point = x_add_on + (target_x) / N; // x axis distance
-   double y_point = s(x_point);  // spline to output the desired y value
+   double x_point = x_add_on + (target_x) / N; // x axis distance  
+   double y_point = s(x_point);  // spline to output the desired y value 
    x_add_on = x_point;
    double x_ref = x_point;
    double y_ref = y_point;
 
-   // global map  to car coordinatre transformation
+   // global map  to car coordinatre transformation 
    x_point = (x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw));
    y_point = (x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw));
 
@@ -155,8 +156,8 @@ for (int i = 1; i <= 50 - previous_path_x.size(); i++)
 
 
 The program is able to drive for the simulator for over 2 hours without incident.
-* No speed limit red message was seen.
-* Max jerk red message was not seen.
-* No collisions.
-* The car stays in its lane most of the time but when it changes lane because of traffic or to return to the center lane.
+* No speed limit red message was seen. 
+* Max jerk red message was not seen. 
+* No collisions. 
+* The car stays in its lane most of the time but changes lane due to traffic or  return to the center lane. 
 * The car change lanes when the there is a slow car in front of it
