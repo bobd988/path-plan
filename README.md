@@ -1,254 +1,162 @@
 # Path Planning Simulation
 
-Udacity [Self-Driving Car Engineer Nanodegree](https://www.udacity.com/course/self-driving-car-engineer-nanodegree--nd013)
+![Vehicle Changing Lanes](./images/screen3.png)
 
-![Vehicle Changing Lanes](Driving_Image.png)
-
-[Click here](https://www.youtube.com/watch?v=34YczKN08eo&feature=youtu.be) for a video.
+[Click here](https://youtu.be/EtD_Qjt8mTM) for a video.
 
 ## Overview
 
-This project simulates a virtual highway with numerous cars running at speeds +- 10 mph of a 50 mph speed limit. 
+In this project we design a path planner that is able to create smooth and safe paths for the car to follow along a three lane highway with traffic. A successful path planner will be able to keep inside its lane, avoid hitting other cars, and pass slower moving traffic all by using localization, sensor fusion, and map data.
 
-The goal of was to program the "ego" car to:
-* Stay as close to the speed limit without exceeding it
-* Drive inside the lane lines, except when changing lanes
-* Avoid all collisions, including going too slow and being rear-ended
-* Accelerate and decelerate smoothly within defined acceleration and jerk limits
-* Change lanes safely when the leading car is moving slowly
+The goals of this project are the followings:
+* The vehicle must safely navigate around a virtual highway
+* The vehicle should drive as close as possible to the 50 MPH speed limit and pass slower traffic
+* The vehicle should avoid hitting other cars and drive inside of the marked road lane
+* The vehicle should be able to make one complete loop around the 6946m highway
+* The vehicle should not experience total acceleration over 10 m/s^2 and jerk that is greater than 10 m/s^3
 
-The project comes with a list of waypoints around the highway. For all cars, localization and sensor fusion data are also provided.
+The project comes with a list of waypoints around the highway. For all cars, localization and sensor fusion data are provided.
 
-The project must meet all points in the [rubric](https://review.udacity.com/#!/rubrics/1020/view). As shown in [the video](https://www.youtube.com/watch?v=34YczKN08eo&feature=youtu.be), this implementation can run at least 10 miles / 14 minutes without incident. 
 
-## Install and Run
+## Prerequisites
 
-Refer to Udacity's [original README](./Udacity_README.md) for instructions on setting up the environment and execution.
+The project has the following dependencies (from Udacity's seed project):
+* cmake >= 3.5
+* make >= 4.1
+* gcc/g++ >= 5.4
+* libuv 1.12.0
+* Udacity's term3 simulator
+
+Once the simulator started
+1. Clone this repo.
+2. Make a build directory: mkdir build && cd build
+3. Compile: cmake .. && make
+4. Run it: ./path_planning
 
 ## Implementation
 
-Other than the addition of the header file [spline.h](./src/spline.h) from [this page](http://kluge.in-chemnitz.de/opensource/spline/), the rest of the implementation was completed in the file [main.cpp](./src/main.cpp). Udacity provided a number of helper functions in [main.cpp](./src/main.cpp). My implementation occurred in the telemetry section of the function h.onMessage(), between lines 233 and 445.
+For this project, I have used the Path Planning Project Starter Code from Udacity. The main.cpp has all the code changes. Besides that the spline.h file was included from http://kluge.in-chemnitz.de/opensource/spline/
 
-There are numerous ways to implement this project successfully. My implementation involves the use of [cubic splines](https://en.wikipedia.org/wiki/Spline_(mathematics)) to generate smooth trajectories. This is similar to an implementation provided in [Udacity's walk-through video](https://www.youtube.com/watch?v=7sI3VHFPP0w).
 
-The implementation is divided into two categories:
-1. Prediction and decision based on environmental cues
-2. Generation of the vehicle's trajectory
 
 ### 1. Prediction and Decision
 
-This step analyzes the localization and sensor fusion data for all cars on the same side of the track, including the ego vehicle. 
+This step looks for the closest cars: the car in front of the ego vehicle and the car just behind the ego vehicle for every lane. By using the sensor fusion data the program can detect the position of other vehicles around us. The code uses this information to measure the distance of cars. If ego car gets too close to the car in front of it then decelerate the vehicle and try to pass it by changing lanes. For instance, if a car on the left or right lane is 30 waypoints behind us then set the left_lane_car or right_lane_car in in main.cpp to true and prevent the vehicle from changing lanes.
+
+The key data structure sensor_fusion is a 2d vector which has following fields:
+* car's unique ID,
+* car's x position in map coordinates
+* car's y position in map coordinates
+* car's x velocity in m/s
+* car's y velocity in m/s
+* car's s position in frenet coordinates
+* car's d position in frenet coordinates
+A sample sensor_fusion is like this
 
 ```cpp
-// Lane identifiers for other cars
-bool too_close = false;
-bool car_left = false;
-bool car_right = false;
+...
 
-// Find ref_v to use, see if car is in lane
-for (int i = 0; i < sensor_fusion.size(); i++) {
-    // Car is in my lane
-    float d = sensor_fusion[i][6];
+[0,1028.214,1148.148,19.12857,8.593667,243.1204,10.14141],[1,1090.842,1181.932,19.95762,5.89691,314.2516,1.103784],
+[2, 832.3537, 1128.152, 0.2051127, 0.01166543, 47.76477, 6.766784]
 
-    // Identify the lane of the car in question
-    int car_lane;
-    if (d >= 0 && d < 4) {
-        car_lane = 0;
-    } else if (d >= 4 && d < 8) {
-        car_lane = 1;
-    } else if (d >= 8 && d <= 12) {
-        car_lane = 2;
-    } else {
-        continue;
-    }
+...
+```
+The planner logic is shown in below diagram
 
-    // Check width of lane, in case cars are merging into our lane
-    double vx = sensor_fusion[i][3];
-    double vy = sensor_fusion[i][4];
-    double check_speed = sqrt(vx*vx + vy*vy);
-    double check_car_s = sensor_fusion[i][5];
+![Vehicle Changing Lanes](./images/screen1.png)
 
-    // If using previous points can project an s value outwards in time
-    // (What position we will be in in the future)
-    // check s values greater than ours and s gap
-    check_car_s += ((double)prev_size*0.02*check_speed);
 
-    int gap = 30; // m
+### 1. Trajectory Generationn
 
-    // Identify whether the car is ahead, to the left, or to the right
-    if (car_lane == lane) {
-        // Another car is ahead
-        too_close |= (check_car_s > car_s) && ((check_car_s - car_s) < gap);
-    } else if (car_lane - lane == 1) {
-        // Another car is to the right
-        car_right |= ((car_s - gap) < check_car_s) && ((car_s + gap) > check_car_s);
-    } else if (lane - car_lane == 1) {
-        // Another car is to the left
-        car_left |= ((car_s - gap) < check_car_s) && ((car_s + gap) > check_car_s);
-    }
+This step computes the trajectory of the vehicle from the decisions made above, the vehicle's position, and previous path points.  we will reference the starting point as where the car is or at the previous paths end point. if previous size is almost empty, use the car as the starting reference. otherise Use the previous path's end point as starting reference to make it smooth.
+
+
+```cpp
+if (prev_size < 2)
+{
+   // previous size is almost empt
+   double prev_car_x = car_x - cos(car_yaw);
+   double prev_car_y = car_y - sin(car_yaw);
+
+   ptsx.push_back(prev_car_x);
+   ptsx.push_back(car_x);
+
+   ptsy.push_back(prev_car_y);
+   ptsy.push_back(car_y);
 }
+else
+{
+   //  Use the previous path's end point
+   ref_x = previous_path_x[prev_size - 1];
+   ref_y = previous_path_y[prev_size - 1];
+
+   double ref_x_prev = previous_path_x[prev_size - 2];
+   double ref_y_prev = previous_path_y[prev_size - 2];
+   ref_yaw = atan2(ref_y - ref_y_prev, ref_x - ref_x_prev);
+
+   // Use two points that make the path point
+   ptsx.push_back(ref_x_prev);
+   ptsx.push_back(ref_x);
+   ptsy.push_back(ref_y_prev);
+   ptsy.push_back(ref_y);
+}
+
 ```
 
-In lines 261 to 307 of [main.cpp](./src/main.cpp), the positions of all the other vehicles are analyzed relative to the ego vehicle. If the ego vehicle is within 30 meters of the vehicle in front, the boolean too_close is flagged true. If vehicles are within that margin on the left or right, car_left or car_right are flagged true, respectively.
+next we add evenly 30m spaced points ahead of the starting reference. The Frenet helper function getXY() is used to generate three points spaced evenly at 30 meters in front of the car .The computed waypoints are transformed using a spline. The spline makes it easier to compute a smooth trajectory in 2D space while taking into account acceleration and velocity.  We have created 5th order polynomial trajectories that can minimize jerk on the Frenet frame independently for s and d.
 
 ```cpp
-// Modulate the speed to avoid collisions. Change lanes if it is safe to do so (nobody to the side)
-double acc = 0.224;
-double max_speed = 49.5;
-if (too_close) {
-    // A car is ahead
-    // Decide to shift lanes or slow down
-    if (!car_right && lane < 2) {
-        // No car to the right AND there is a right lane -> shift right
-        lane++;
-    } else if (!car_left && lane > 0) {
-        // No car to the left AND there is a left lane -> shift left
-        lane--;
-    } else {
-        // Nowhere to shift -> slow down
-        ref_vel -= acc;
-    }
-} else {
-    if (lane != 1) {
-        // Not in the center lane. Check if it is safe to move back
-        if ((lane == 2 && !car_left) || (lane == 0 && !car_right)) {
-            // Move back to the center lane
-            lane = 1;
-        }
-    }
-    
-    if (ref_vel < max_speed) {
-        // No car ahead AND we are below the speed limit -> speed limit
-        ref_vel += acc;
-    }
-}
+vector<double> next_wp0 = getXY(car_s + 30, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+vector<double> next_wp1 = getXY(car_s + 60, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+vector<double> next_wp2 = getXY(car_s + 90, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+
 ```
 
-In lines 309 to 338 of [main.cpp](./src/main.cpp), decisions are made on how to adjust speed and change lanes. If a car is ahead within the gap, the lanes to the left and right are checked. If one of them is empty, the car will change lanes. Otherwise it will slow down.
+The path will always total 50 points at desired speed. Now besides the above 5 points  we will calculate rest of points. The below code shows how use  spline how to break up spline points so that car travels at desired reference velocity for the rest of ponts.  We create a list of  spaced (x, y) waypoints, evenly spaced at 30m. Then we interpolate these waypoints with a spline and fill it in with more points that control speed. we fill up the rest of path planner after filling it with previous points,
 
-The car will move back to the center lane when it becomes clear. This is because a car can move both left and right from the center lane, and it is more likely to get stuck going slowly if on the far left or right.
+N is the number of pieces we want to split the line. Velocity is the desired velocity in meters per hour. NOTE: the car will visit a point every 0.02 seconds
 
-If the area in front of the car is clear, no matter the lane, the car will speed up.
 
-### 2. Trajectory Generation
+![Vehicle Changing Lanes](./images/screen2.png)
 
-Lines 340 to 445 of [main.cpp](./src/main.cpp) compute the trajectory of the vehicle from the decisions made above, the vehicle's position, and historical path points. 
 
-```cpp
-// Create a list of widely spaced (x,y) waypoints, evenly spaced at 30m
-vector<double> ptsx;
-vector<double> ptsy;
-
-// Reference x, y, yaw states
-double ref_x = car_x;
-double ref_y = car_y;
-double ref_yaw = deg2rad(car_yaw);
-
-// If previous size is almost empty, use the car as starting reference
-if (prev_size < 2) {
-    // Use two points that make the path tangent to the car
-    double prev_car_x = car_x - cos(car_yaw);
-    double prev_car_y = car_y - sin(car_yaw);
-
-    ptsx.push_back(prev_car_x);
-    ptsx.push_back(car_x);
-
-    ptsy.push_back(prev_car_y);
-    ptsy.push_back(car_y);
-} else {
-    // Use the previous path's endpoint as starting ref
-    // Redefine reference state as previous path end point
-
-    // Last point
-    ref_x = previous_path_x[prev_size-1];
-    ref_y = previous_path_y[prev_size-1];
-
-    // 2nd-to-last point
-    double ref_x_prev = previous_path_x[prev_size-2];
-    double ref_y_prev = previous_path_y[prev_size-2];
-    ref_yaw = atan2(ref_y-ref_y_prev, ref_x-ref_x_prev);
-
-    // Use two points that make the path tangent to the path's previous endpoint
-    ptsx.push_back(ref_x_prev);
-    ptsx.push_back(ref_x);
-
-    ptsy.push_back(ref_y_prev);
-    ptsy.push_back(ref_y);
-}
-
-// Using Frenet, add 30 m evenly spaced points ahead of the starting reference
-vector<double> next_wp0 = getXY(car_s+30, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
-vector<double> next_wp1 = getXY(car_s+60, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
-vector<double> next_wp2 = getXY(car_s+90, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-ptsx.push_back(next_wp0[0]);
-ptsx.push_back(next_wp1[0]);
-ptsx.push_back(next_wp2[0]);
-
-ptsy.push_back(next_wp0[1]);
-ptsy.push_back(next_wp1[1]);
-ptsy.push_back(next_wp2[1]);
-
-for (int i = 0; i < ptsx.size(); i++) {
-    // Shift car reference angle to 0 degrees
-    double shift_x = ptsx[i] - ref_x;
-    double shift_y = ptsy[i] - ref_y;
-
-    ptsx[i] = (shift_x * cos(0-ref_yaw) - shift_y * sin(0-ref_yaw));
-    ptsy[i] = (shift_x * sin(0-ref_yaw) + shift_y * cos(0-ref_yaw));
-}
-```
-
-In lines 340 to 401 of [main.cpp](./src/main.cpp), the last two points in the already-covered terrain are computed. If the vehicle has not yet moved 60 meters, the vehicle's current position is used instead of the historical waypoints. In addition, the Frenet helper function getXY() is used to generate three points spaced evenly at 30 meters in front of the car
-
-Because splines are the method used to generate the trajectory, a shift and rotate transform is applied.
 
 ```cpp
-// Create a spline called s
-tk::spline s;
-
-// Set (x,y) points to the spline
-s.set_points(ptsx, ptsy);
-
-// Define the actual (x,y) points we will use for the planner
-vector<double> next_x_vals;
-vector<double> next_y_vals;
-
-// Start with all the previous path points from last time
-for (int i = 0; i < previous_path_x.size(); i++) {
-    next_x_vals.push_back(previous_path_x[i]);
-    next_y_vals.push_back(previous_path_y[i]);
-}
-
-// Compute how to break up spline points so we travel at our desired reference velocity
 double target_x = 30.0;
 double target_y = s(target_x);
-double target_dist = sqrt((target_x) * (target_x) + (target_y) * (target_y));
+double target_dist = sqrt((target_x * target_x) + (target_y * target_y)); // this is shown in d distance as above
+
 double x_add_on = 0;
+for (int i = 1; i <= 50 - previous_path_x.size(); i++)
+{
+   double N = (target_dist / (.02 * ref_vel / 2.24)); // 2.24 convert mile/hour to meter/second ,N = d/.0.2*ref_vel
+   double x_point = x_add_on + (target_x) / N; // x axis distance
+   double y_point = s(x_point);  // spline to output the desired y value
+   x_add_on = x_point;
+   double x_ref = x_point;
+   double y_ref = y_point;
 
-// Fill up the rest of the path planner to always output 50 points
-for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
-    double N = (target_dist/(.02*ref_vel/2.24));
-    double x_point = x_add_on + (target_x) / N;
-    double y_point = s(x_point);
+   // global map  to car coordinatre transformation
+   x_point = (x_ref * cos(ref_yaw) - y_ref * sin(ref_yaw));
+   y_point = (x_ref * sin(ref_yaw) + y_ref * cos(ref_yaw));
 
-    x_add_on = x_point;
+   x_point += ref_x;
+   y_point += ref_y;
 
-    double x_ref = x_point;
-    double y_ref = y_point;
-
-    // Rotate back to normal after rotating it earlier
-    x_point = (x_ref * cos(ref_yaw) - y_ref*sin(ref_yaw));
-    y_point = (x_ref * sin(ref_yaw) + y_ref*cos(ref_yaw));
-
-    x_point += ref_x;
-    y_point += ref_y;
-
-    next_x_vals.push_back(x_point);
-    next_y_vals.push_back(y_point);
+   next_x_vals.push_back(x_point);
+   next_y_vals.push_back(y_point);
 }
+
+
 ```
 
-In lines 403 to 445 of [main.cpp](./src/main.cpp), the computed waypoints are transformed using a spline. The spline makes it relatively easy to compute a smooth trajectory in 2D space while taking into account acceleration and velocity. 
 
-50 waypoints are generated in total. Because the length of the generated trajectory is variable, after the vehicle has assumed the correct position, the rest of the waypoints are generated to keep the vehicle in the target lane. This can be observed by watching the green trajectory line in front of the vehicle as a lane change occurs ([in the video](https://www.youtube.com/watch?v=34YczKN08eo&feature=youtu.be)).
+## Conclusion
+
+
+The program is able to drive for the simulator for over 2 hours without incident.
+* No speed limit red message was seen.
+* Max jerk red message was not seen.
+* No collisions.
+* The car stays in its lane most of the time but when it changes lane because of traffic or to return to the center lane.
+* The car change lanes when the there is a slow car in front of it
